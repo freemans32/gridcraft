@@ -401,6 +401,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Save the workbook under another name or in another folder." => "Zapisz skoroszyt pod inną nazwą lub w innym folderze.",
         "Print Active Sheets" => "Drukuj aktywne arkusze",
         "Print Entire Workbook" => "Drukuj cały skoroszyt",
+        "Print Selection" => "Drukuj zaznaczenie",
         "Fit Sheet on One Page" => "Dopasuj arkusz do jednej strony",
         "Pages" => "Strony",
         "Print pages|to" => "do",

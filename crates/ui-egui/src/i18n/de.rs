@@ -348,6 +348,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         }
         "Print Active Sheets" => "Aktive Blätter drucken",
         "Print Entire Workbook" => "Gesamte Arbeitsmappe drucken",
+        "Print Selection" => "Auswahl drucken",
         "Fit Sheet on One Page" => "Blatt auf einer Seite darstellen",
         "Pages" => "Seiten",
         "Print pages|to" => "bis",

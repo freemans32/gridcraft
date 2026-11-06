@@ -406,6 +406,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Save the workbook under another name or in another folder." => "Зберегти книгу під іншим іменем або в іншій теці.",
         "Print Active Sheets" => "Надрукувати активні аркуші",
         "Print Entire Workbook" => "Надрукувати всю книгу",
+        "Print Selection" => "Друкувати виділений фрагмент",
         "Fit Sheet on One Page" => "Вмістити аркуш на одну сторінку",
         "Pages" => "Сторінки",
         "Print pages|to" => "по",

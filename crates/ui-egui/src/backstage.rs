@@ -111,7 +111,7 @@ const PROPERTIES: [(&str, &str); 6] = [
 ];
 
 /// Inputs that determine cached pagination, including a view-only active-sheet change.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct PrintPreviewKey {
     document: u64,
     revision: u64,
@@ -120,6 +120,8 @@ struct PrintPreviewKey {
     scaling: PrintScaling,
     /// The page range (Pages … to …).
     pages: PageRange,
+    /// Print Selection: the selected areas, as A1 text.
+    selection: Option<String>,
 }
 
 /// The open Backstage view.
@@ -132,6 +134,8 @@ pub struct Backstage {
     text_edit_focused: bool,
     /// Print: the whole workbook rather than the active sheet.
     pub print_all: bool,
+    /// Print: the active sheet's selection rather than a whole sheet (Print Selection).
+    pub print_selection: bool,
     /// Print: a job override, or each sheet's own Page Setup.
     pub scaling: PrintScaling,
     /// Export and Save As: fit each sheet of a PDF on one page.
@@ -205,6 +209,7 @@ impl Backstage {
             props: Default::default(),
             text_edit_focused: false,
             print_all: false,
+            print_selection: false,
             scaling: PrintScaling::PageSetup,
             pdf_fit_to_page: false,
             preview_page: 0,

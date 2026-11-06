@@ -15,8 +15,22 @@ pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &m
         return;
     };
     let mut params = bs.print_params();
+    // The selection is not part of the document revision, so it goes in the preview's key.
+    let selection = if bs.print_selection { app.session.active().map(|d| d.selection.a1()) } else { None };
+    if let Some(range) = &selection {
+        params["sheets"] = json!("active");
+        params["range"] = json!(range);
+    }
     app.print_pages.apply(&mut params);
-    let key = super::PrintPreviewKey { document: uid, revision, active_sheet, all_sheets: bs.print_all, scaling: bs.scaling, pages: app.print_pages };
+    let key = super::PrintPreviewKey {
+        document: uid,
+        revision,
+        active_sheet,
+        all_sheets: bs.print_all,
+        scaling: bs.scaling,
+        pages: app.print_pages,
+        selection,
+    };
     if bs.preview.as_ref().is_none_or(|(k, _)| *k != key) {
         if bs.preview.as_ref().is_some_and(|(k, _)| k.pages != key.pages) {
             bs.preview_page = 0;
@@ -43,14 +57,19 @@ pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &m
                 out.close = app.services.print_native.is_none();
             }
             ui.add_space(16.0);
-            let scope = if bs.print_all { "Print Entire Workbook" } else { "Print Active Sheets" };
+            // (whole workbook, selection) for each choice; Print Selection prints the active sheet's
+            // selected areas, one run of pages each (#2371).
+            let choices = [((false, false), "Print Active Sheets"), ((true, false), "Print Entire Workbook"), ((false, true), "Print Selection")];
+            let current = (bs.print_all, bs.print_selection);
+            let scope = choices.iter().find(|(c, _)| *c == current).map_or("Print Active Sheets", |(_, label)| *label);
             craft_ui::ComboBox::from_id_salt("backstage_print_scope")
                 .width(230.0)
                 .selected_text(lang.tr(scope))
                 .show_ui(ui, |ui| {
-                    for (all, label) in [(false, "Print Active Sheets"), (true, "Print Entire Workbook")] {
-                        if ui.selectable_label(bs.print_all == all, lang.tr(label)).clicked() {
+                    for ((all, selection), label) in choices {
+                        if ui.selectable_label(current == (all, selection), lang.tr(label)).clicked() {
                             bs.print_all = all;
+                            bs.print_selection = selection;
                             bs.preview_page = 0;
                         }
                     }

@@ -408,6 +408,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Save the workbook under another name or in another folder." => "Salvează registrul cu alt nume sau în alt folder.",
         "Print Active Sheets" => "Imprimare foi active",
         "Print Entire Workbook" => "Imprimare tot registrul",
+        "Print Selection" => "Imprimare selecție",
         "Fit Sheet on One Page" => "Încadrare foaie pe o pagină",
         "Pages" => "Pagini",
         "Print pages|to" => "la",

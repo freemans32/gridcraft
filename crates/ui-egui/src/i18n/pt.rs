@@ -416,6 +416,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Save the workbook under another name or in another folder." => "Salve a pasta de trabalho com outro nome ou em outra pasta.",
         "Print Active Sheets" => "Imprimir planilhas ativas",
         "Print Entire Workbook" => "Imprimir toda a pasta de trabalho",
+        "Print Selection" => "Imprimir Seleção",
         "Fit Sheet on One Page" => "Ajustar planilha em uma página",
         "Pages" => "Páginas",
         "Print pages|to" => "até",

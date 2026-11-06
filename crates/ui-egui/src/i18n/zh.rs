@@ -414,6 +414,7 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Save the workbook under another name or in another folder." => "以其他名称或在其他文件夹中保存工作簿。",
         "Print Active Sheets" => "打印活动工作表",
         "Print Entire Workbook" => "打印整个工作簿",
+        "Print Selection" => "打印选定区域",
         "Fit Sheet on One Page" => "将工作表调整为一页",
         "Pages" => "页数",
         "Print pages|to" => "至",
