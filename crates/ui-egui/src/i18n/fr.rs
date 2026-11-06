@@ -424,6 +424,14 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Print Active Sheets" => "Imprimer les feuilles actives",
         "Print Entire Workbook" => "Imprimer tout le classeur",
         "Print Selection" => "Imprimer la sélection",
+        "Use Page Setup" => "Utiliser la mise en page",
+        "No Scaling" => "Pas de mise à l'échelle",
+        "Fit All Columns on One Page" => "Ajuster toutes les colonnes sur une page",
+        "Fit All Rows on One Page" => "Ajuster toutes les lignes sur une page",
+        "Print Scaling" => "Mise à l'échelle",
+        "This sheet is too large to fit on one page, even at the smallest scale (10%). The PDF has {pages} pages." => {
+            "Cette feuille est trop grande pour tenir sur une page, même à la plus petite échelle (10 %). Le PDF compte {pages} pages."
+        }
         "Fit Sheet on One Page" => "Ajuster la feuille sur une page",
         "Pages" => "Pages",
         "Print pages|to" => "à",
