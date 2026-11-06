@@ -62,6 +62,7 @@ impl eframe::App for App {
         self.1.show(&mut self.0, ui);
     }
     fn on_exit(&mut self) {
+        self.0.autosave_on_exit();
         print::finish_pending_jobs();
         // Before the process ends: a last copy of unsaved work, and no leftover copies.
         self.0.session.finish_recovery();
