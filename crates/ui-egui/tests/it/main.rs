@@ -31,6 +31,7 @@ mod dialog_focus;
 mod dialog_move;
 mod document_tabs;
 mod drag_cursor;
+mod drag_formula_refs;
 mod equation_editor;
 mod error_checking_menu;
 mod file_menu;
