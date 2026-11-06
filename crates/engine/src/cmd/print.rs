@@ -42,13 +42,14 @@ type PicCache = std::collections::HashMap<(usize, usize), Option<(Vec<u8>, u32, 
 #[cfg(test)]
 use layout::bands;
 pub(crate) use layout::split_bands;
-pub use layout::{PrintOptions, SheetLayout, layout_sheet, layouts, paper_size, print_range};
+pub use layout::{PrintOptions, PrintScaling, SheetLayout, layout_sheet, layouts, paper_size, print_range};
 use layout::{known_paper, seg_size, segments};
 use objects::draw_objects;
 #[cfg(test)]
 use text::{center_across_width, wrap_lines};
 
-/// The printing commands: print, export as PDF, the print preview and Page Setup.
+/// The printing commands: print, export as PDF, the print preview and Page Setup, with one
+/// pagination and scaling contract.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!(
@@ -56,7 +57,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Export as PDF",
             ["File", "Export"],
             None,
-            "{path?, sheets?: active|all, range?: \"A1:F40\" (active sheet), fitToPage?: bool, from?: page (1-based, counted over the whole job in sheet order), to?: page} → {pages, bytes, path} or {pages, bytes, base64} when no path. Honours each sheet's Page Setup. A page range prints only its pages, and their headers and footers keep the whole job's &P and &N; `from` after the last page is an error, `to` past it stops at the last page, and `from` greater than `to` prints the pages between them.",
+            "{path?, sheets?: active|all, range?: \"A1:F40\" (active sheet), scaling?: pageSetup|none|sheet|columns|rows, fitToPage?: bool (legacy, exclusive with scaling), from?: page (1-based, counted over the whole job in sheet order), to?: page} → {pages, bytes, path} or {pages, bytes, base64} when no path. Honours each sheet's Page Setup. A page range prints only its pages, and their headers and footers keep the whole job's &P and &N; `from` after the last page is an error, `to` past it stops at the last page, and `from` greater than `to` prints the pages between them.",
             has_doc,
             export_pdf
         ),
@@ -65,7 +66,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print…",
             ["File"],
             Some("Cmd+P"),
-            "{path?, sheets?: active|all, range?, fitToPage?: bool, from?: page (1-based, over the whole job), to?: page} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog; a page range works as in file.exportPdf",
+            "{path?, sheets?: active|all, range?, scaling?: pageSetup|none|sheet|columns|rows, fitToPage?: bool (legacy, exclusive with scaling), from?: page (1-based, over the whole job), to?: page} → {pages, bytes, base64} — the PDF the UI hands to the system print dialog; a page range works as in file.exportPdf",
             has_doc,
             print
         ),
@@ -74,7 +75,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print Preview",
             ["File"],
             None,
-            "{page? (1-based), sheets?: active|all, range?, fitToPage?, from?: page, to?: page} → {pages, total, pageList: [{page, sheet, range, rows, columns, scale, paper, orientation, pageOrder, width, height, hfPage: odd|first|even, headerMargin, footerMargin, hfSides: [left, right], hfScale}]} in print order; with a page range, pageList holds only the pages that print, under their numbers in the whole job of `total` pages",
+            "{page? (1-based), sheets?: active|all, range?, scaling?: pageSetup|none|sheet|columns|rows, fitToPage?: bool (legacy, exclusive with scaling), from?: page, to?: page} → {pages, total, pageList: [{page, sheet, range, rows, columns, scale, paper, orientation, pageOrder, width, height, hfPage: odd|first|even, headerMargin, footerMargin, hfSides: [left, right], hfScale}]} in print order; with a page range, pageList holds only the pages that print, under their numbers in the whole job of `total` pages",
             has_doc,
             print_preview
         ),

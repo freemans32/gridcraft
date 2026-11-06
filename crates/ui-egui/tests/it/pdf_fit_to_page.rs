@@ -74,7 +74,7 @@ fn export_pdf_fit_to_one_page_checkbox_fits_a_wide_sheet_and_resets_when_reopene
     assert!(!bs.pdf_fit_to_page, "the setting does not outlive the Backstage view");
     tick_fit_to_one_page(&mut h);
     let bs = h.state().backstage.as_ref().unwrap();
-    assert!(bs.pdf_fit_to_page && !bs.fit_to_page, "ticking it leaves the Print page's own option alone");
+    assert!(bs.pdf_fit_to_page && bs.scaling.id() == "pageSetup", "ticking it leaves the Print page's own option alone");
     click(&mut h, "Create PDF");
     assert_eq!(pdf_pages(&std::fs::read(dir.join("Export2.pdf")).unwrap()), 1);
     assert!(h.state().message.is_none(), "a sheet that fits gets no warning");
