@@ -121,6 +121,8 @@ pub struct Backstage {
     pub print_all: bool,
     /// Print: fit each sheet on one page.
     pub fit_to_page: bool,
+    /// Export and Save As: fit each sheet of a PDF on one page.
+    pub pdf_fit_to_page: bool,
     /// Print: the previewed page (0-based, among the pages that print).
     preview_page: usize,
     /// Print: the preview and what it was made for.
@@ -189,6 +191,7 @@ impl Backstage {
             text_edit_focused: false,
             print_all: false,
             fit_to_page: false,
+            pdf_fit_to_page: false,
             preview_page: 0,
             preview: None,
             print_drafts: Default::default(),
@@ -758,9 +761,13 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
             if after != before || app.services.pick_save.is_none() {
                 out.close = true;
             }
-        } else if export_as(app, fmt, json!({})) {
+        } else if export_as(app, fmt, if fmt == "pdf" && bs.pdf_fit_to_page { json!({"fitToPage": true}) } else { json!({}) }) {
             out.close = true;
         }
+    }
+    if fmt == "pdf" {
+        ui.add_space(8.0);
+        ui.checkbox(&mut bs.pdf_fit_to_page, lang.tr("Fit Sheet on One Page"));
     }
     ui.add_space(18.0);
     dim(ui, lang.tr("A CSV file, web page or PDF is a copy: the workbook keeps its own file."));
@@ -774,6 +781,9 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
     let t = Tokens::get(ui.ctx());
     let lang = app.ui.language;
     let mut params = pdf_params(app, bs.publish);
+    if bs.pdf_fit_to_page {
+        params["fitToPage"] = json!(true);
+    }
     bs.pdf_pages.apply(&mut params);
     if action_row(ui, Icon::Paper, lang.tr("Create PDF"), lang.tr("Save the sheet as a PDF document that keeps its page layout.")).clicked()
         && export_pdf(app, params.clone())
@@ -801,6 +811,10 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
                     bs.export_page = 0;
                 }
             });
+            ui.add_space(6.0);
+            if ui.checkbox(&mut bs.pdf_fit_to_page, lang.tr("Fit Sheet on One Page")).changed() {
+                bs.export_page = 0;
+            }
         });
         ui.add_space(16.0);
         ui.vertical(|ui| {
@@ -863,20 +877,38 @@ fn export_pdf(app: &mut SheetApp, params: Json) -> bool {
     if !app.commit_edit(0, 0, false, false) {
         return false;
     }
-    if app.services.pick_save.is_some() {
-        return app.export_pdf_with_picker(params);
-    }
-    if app.services.download.is_none() {
+    let fit_to_page = params.get("fitToPage").and_then(Json::as_bool).unwrap_or(false);
+    let written = if app.services.pick_save.is_some() {
+        app.export_pdf_with_picker(params)
+    } else if app.services.download.is_none() {
         app.message = Some(("GridCraft".into(), "Exporting needs a file picker, which this window doesn't have.".into()));
-        return false;
-    }
-    // Without a path the PDF comes back as bytes, which `SheetApp::run` hands to the browser.
-    match app.run("file.exportPdf", params) {
-        Ok(_) => true,
-        Err(e) => {
-            app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
-            false
+        None
+    } else {
+        // Without a path the PDF comes back as bytes, which `SheetApp::run` hands to the browser.
+        match app.run("file.exportPdf", params) {
+            Ok(r) => Some(r),
+            Err(e) => {
+                app.message = Some(("GridCraft".into(), crate::clean_error(&e)));
+                None
+            }
         }
+    };
+    let Some(result) = written else { return false };
+    warn_if_not_one_page(app, &result, fit_to_page);
+    true
+}
+
+/// Fit to one page stops shrinking at 10%, so a very large sheet can still need several pages.
+/// Says so instead of leaving the user to find out when they open the PDF.
+fn warn_if_not_one_page(app: &mut SheetApp, result: &Json, fit_to_page: bool) {
+    let pages = result.get("pages").and_then(Json::as_u64).unwrap_or(0);
+    if fit_to_page && pages > 1 {
+        let text = app
+            .ui
+            .language
+            .tr("This sheet is too large to fit on one page, even at the smallest scale (10%). The PDF has {pages} pages.")
+            .replace("{pages}", &pages.to_string());
+        app.message = Some(("GridCraft".into(), text));
     }
 }
 
