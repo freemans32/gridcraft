@@ -18,13 +18,14 @@ use serde_json::{Value as Json, json};
 use crate::SheetApp;
 use crate::i18n::{self, Language};
 use crate::icons::{self, Icon};
+use crate::printing::PageRange;
 use crate::theme::{self, Tokens};
 
 mod options;
 mod print;
 
 use options::{options, platform};
-use print::{preview_pane, print};
+use print::{page_range_fields, preview_pane, print};
 
 /// Width of the navigation column.
 const NAV_W: f32 = 196.0;
@@ -120,16 +121,22 @@ pub struct Backstage {
     pub print_all: bool,
     /// Print: fit each sheet on one page.
     pub fit_to_page: bool,
-    /// Print: the previewed page (0-based).
+    /// Print: the previewed page (0-based, among the pages that print).
     preview_page: usize,
-    /// Print: the preview for (document, revision, whole workbook, fit to page).
-    preview: Option<((u64, u64, bool, bool), Json)>,
+    /// Print: the preview and what it was made for.
+    preview: Option<(PreviewKey, Json)>,
+    /// Print: the Pages … to … fields as typed.
+    print_drafts: [String; 2],
     /// Export › Create PDF: what it publishes.
     pub publish: PublishWhat,
+    /// Export › Create PDF: its page range, and its fields as typed.
+    pdf_pages: PageRange,
+    pdf_drafts: [String; 2],
     /// Export › Create PDF: the previewed page (0-based).
     export_page: usize,
-    /// Export › Create PDF: the pages it would export, or why they couldn't be laid out.
-    export_preview: Option<(ExportKey, Result<Vec<Json>, String>)>,
+    /// Export › Create PDF: the `file.printPreview` of the pages it would export, or why they
+    /// couldn't be laid out.
+    export_preview: Option<(ExportKey, Result<Json, String>)>,
     /// Save As: the chosen file type (an extension from [`SAVE_TYPES`]).
     pub save_format: &'static str,
     /// Home and Open: when the recent workbooks were last changed.
@@ -165,6 +172,10 @@ impl PublishWhat {
 /// sheet, and a workbook's revision does not change when another sheet is activated.
 type ExportKey = (u64, u64, usize, Json);
 
+/// What a print preview was made for: document, revision, whole workbook, fit to page and page
+/// range.
+type PreviewKey = (u64, u64, bool, bool, PageRange);
+
 /// Save As file types: (extension, label). The first is the workbook itself; the others are
 /// exports that leave the workbook's own file and unsaved state alone.
 pub const SAVE_TYPES: [(&str, &str); 4] =
@@ -180,7 +191,10 @@ impl Backstage {
             fit_to_page: false,
             preview_page: 0,
             preview: None,
+            print_drafts: Default::default(),
             publish: PublishWhat::ActiveSheet,
+            pdf_pages: PageRange::default(),
+            pdf_drafts: Default::default(),
             export_page: 0,
             export_preview: None,
             save_format: "xlsx",
@@ -744,7 +758,7 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
             if after != before || app.services.pick_save.is_none() {
                 out.close = true;
             }
-        } else if export_as(app, fmt) {
+        } else if export_as(app, fmt, json!({})) {
             out.close = true;
         }
     }
@@ -752,14 +766,15 @@ fn save_as(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcom
     dim(ui, lang.tr("A CSV file, web page or PDF is a copy: the workbook keeps its own file."));
 }
 
-/// File › Export. Create PDF publishes what "Publish What" names; beside it, its pages are
-/// previewed through `file.printPreview` with the parameters it exports with.
+/// File › Export. Create PDF publishes what "Publish What" names, in its page range; beside it,
+/// its pages are previewed through `file.printPreview` with the parameters it exports with.
 /// `file.printPreview` lays pages out as `file.exportPdf` does, so the preview shows the pages
 /// the PDF will hold.
 fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome) {
     let t = Tokens::get(ui.ctx());
     let lang = app.ui.language;
-    let params = pdf_params(app, bs.publish);
+    let mut params = pdf_params(app, bs.publish);
+    bs.pdf_pages.apply(&mut params);
     if action_row(ui, Icon::Paper, lang.tr("Create PDF"), lang.tr("Save the sheet as a PDF document that keeps its page layout.")).clicked()
         && export_pdf(app, params.clone())
     {
@@ -769,7 +784,7 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
         // In line with the row's title, under its icon.
         ui.add_space(52.0);
         ui.vertical(|ui| {
-            ui.set_width(180.0);
+            ui.set_width(190.0);
             ui.label(RichText::new(lang.tr("Publish What")).font(theme::ui_bold(12.5)).color(t.text));
             ui.add_space(4.0);
             for what in PublishWhat::ALL {
@@ -778,12 +793,25 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
                     bs.export_page = 0;
                 }
             }
+            ui.add_space(10.0);
+            // Create PDF's page range, counted over what it publishes; empty fields export every page.
+            ui.horizontal(|ui| {
+                if let Some(range) = page_range_fields(ui, lang, "backstage_pdf_pages", &mut bs.pdf_drafts, bs.pdf_pages) {
+                    bs.pdf_pages = range;
+                    bs.export_page = 0;
+                }
+            });
         });
         ui.add_space(16.0);
         ui.vertical(|ui| {
             refresh_export_preview(app, bs, params);
-            match bs.export_preview.as_ref().map(|(_, pages)| pages) {
-                Some(Ok(pages)) => preview_pane(app, ui, pages, &mut bs.export_page, vec2(300.0, 380.0), lang.tr("Nothing to export.")),
+            match bs.export_preview.as_ref().map(|(_, preview)| preview) {
+                Some(Ok(preview)) => {
+                    let pages = preview.get("pageList").and_then(Json::as_array).map_or(&[][..], Vec::as_slice);
+                    // The whole job's page count: a page range previews only its pages, under their numbers.
+                    let total = preview.get("total").and_then(Json::as_u64).unwrap_or(pages.len() as u64);
+                    preview_pane(app, ui, pages, total, &mut bs.export_page, vec2(300.0, 380.0), lang.tr("Nothing to export."));
+                }
                 Some(Err(e)) => dim(ui, e),
                 None => dim(ui, lang.tr("No workbook is open.")),
             }
@@ -795,7 +823,7 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
         ("csv", Icon::TextColumns, "CSV (Comma delimited)", "Save the active sheet as comma-separated text."),
         ("html", Icon::Link, "Web Page (.html)", "Save the workbook as a web page."),
     ] {
-        if action_row(ui, icon, lang.tr(title), lang.tr(detail)).clicked() && export_as(app, fmt) {
+        if action_row(ui, icon, lang.tr(title), lang.tr(detail)).clicked() && export_as(app, fmt, json!({})) {
             out.close = true;
         }
     }
@@ -824,12 +852,8 @@ fn refresh_export_preview(app: &mut SheetApp, bs: &mut Backstage, params: Json) 
     if bs.export_preview.as_ref().is_some_and(|(k, _)| *k == key) {
         return;
     }
-    let pages = app
-        .session
-        .run("file.printPreview", key.3.clone())
-        .map_err(|e| crate::clean_error(&e))
-        .map(|r| r.get("pageList").and_then(Json::as_array).cloned().unwrap_or_default());
-    bs.export_preview = Some((key, pages));
+    let preview = app.session.run("file.printPreview", key.3.clone()).map_err(|e| crate::clean_error(&e));
+    bs.export_preview = Some((key, preview));
 }
 
 /// Create PDF: writes `file.exportPdf` with `params` through the save picker on the desktop, or
@@ -857,10 +881,11 @@ fn export_pdf(app: &mut SheetApp, params: Json) -> bool {
 }
 
 /// Exports the active workbook as `pdf`, `csv` or `html`: through the save picker on the desktop,
-/// as a browser download on the web. Returns whether a file was written or handed over.
-pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
+/// as a browser download on the web. `params` go to the export command with the path (a PDF's
+/// scope and page range). Returns whether a file was written or handed over.
+pub fn export_as(app: &mut SheetApp, fmt: &str, params: Json) -> bool {
     if fmt == "pdf" {
-        return export_pdf(app, json!({}));
+        return export_pdf(app, params);
     }
     if !app.commit_edit(0, 0, false, false) {
         return false;
@@ -870,13 +895,15 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
         "html" => "file.exportHtml",
         _ => return false,
     };
+    let mut params = if params.is_object() { params } else { json!({}) };
     let title = app.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
     let stem = std::path::Path::new(&title).file_stem().and_then(std::ffi::OsStr::to_str).unwrap_or("Book1").to_string();
     if let Some(pick) = &app.services.pick_save {
         let Some(path) = pick(&format!("{stem}.{fmt}")) else { return false };
         // The picker may suggest a workbook extension; the export writes the chosen format.
         let path = std::path::Path::new(&path).with_extension(fmt).to_string_lossy().into_owned();
-        return match app.run(id, json!({"path": path})) {
+        params["path"] = json!(path);
+        return match app.run(id, params) {
             Ok(_) => true,
             Err(e) => {
                 app.message = Some(("GridCraft".into(), crate::clean_error(&e)));

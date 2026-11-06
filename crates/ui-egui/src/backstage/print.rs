@@ -3,10 +3,11 @@ use gridcraft_engine::cmd::print::{self as pr, HfContext, HfFrame, HfItem};
 use gridcraft_engine::model::HfPage;
 
 use super::{
-    Align2, Backstage, Icon, Json, Outcome, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, dim, json, pos2, square_button, theme, vec2,
+    Align2, Backstage, Icon, Json, Language, Outcome, PageRange, Rect, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, dim, json, pos2,
+    square_button, theme, vec2,
 };
 
-/// Builds the print scope and fit-to-page parameters, caches `file.printPreview` per document revision/options, and draws page thumbnails with navigation plus the print settings and Print action.
+/// Builds the print scope, page range and fit-to-page parameters, caches `file.printPreview` per document revision/options, and draws page thumbnails with navigation plus the print settings and Print action.
 pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome) {
     let lang = app.ui.language;
     let Some((uid, revision)) = app.session.active().map(|d| (d.uid, d.revision)) else {
@@ -17,19 +18,27 @@ pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &m
     if bs.fit_to_page {
         params["fitToPage"] = json!(true);
     }
-    let key = (uid, revision, bs.print_all, bs.fit_to_page);
+    app.print_pages.apply(&mut params);
+    let key = (uid, revision, bs.print_all, bs.fit_to_page, app.print_pages);
     if bs.preview.as_ref().is_none_or(|(k, _)| *k != key) {
+        if bs.preview.as_ref().is_some_and(|(k, _)| k.4 != key.4) {
+            bs.preview_page = 0;
+        }
+        // A range that starts after the last page is an error: nothing to print.
         let preview = app.session.run("file.printPreview", params.clone()).unwrap_or(Json::Null);
         bs.preview = Some((key, preview));
     }
-    let pages: Vec<Json> = bs.preview.as_ref().and_then(|(_, p)| p.get("pageList")).and_then(Json::as_array).cloned().unwrap_or_default();
+    let preview = bs.preview.as_ref().map(|(_, p)| p);
+    let pages: Vec<Json> = preview.and_then(|p| p.get("pageList")).and_then(Json::as_array).cloned().unwrap_or_default();
+    // The whole job's page count: a page range previews only its pages, under their numbers in the job.
+    let total = preview.and_then(|p| p.get("total")).and_then(Json::as_u64).unwrap_or(pages.len() as u64);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(250.0);
             if let Some(discover) = &app.services.printers {
                 crate::printing::show(&mut app.printing, ui, discover, |label| lang.tr(label).to_owned());
             }
-            let can_print = app.services.print_native.is_none() || app.printing.ready();
+            let can_print = (app.services.print_native.is_none() || app.printing.ready()) && !pages.is_empty();
             if ui.add_enabled_ui(can_print, |ui| square_button(ui, Icon::Print, lang.tr("Print"))).inner.clicked()
                 && app.commit_edit(0, 0, false, false)
             {
@@ -52,6 +61,16 @@ pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &m
                 .response
                 .accessible_name(lang.tr("Print What"));
             ui.add_space(8.0);
+            // Pages … to …, counted over what the scope prints; empty fields print every page.
+            ui.horizontal(|ui| {
+                if let Some(range) = page_range_fields(ui, lang, "backstage_print_pages", &mut bs.print_drafts, app.print_pages) {
+                    // Set through `ui.printSettings`, as a control client sets them. It refuses changes
+                    // only while a job is being handed to the printer; a field left then shows the kept range.
+                    let _ = app.run("ui.printSettings", json!({"from": range.from, "to": range.to}));
+                    ui.ctx().request_repaint();
+                }
+            });
+            ui.add_space(8.0);
             if ui.checkbox(&mut bs.fit_to_page, lang.tr("Fit Sheet on One Page")).changed() {
                 bs.preview_page = 0;
             }
@@ -61,15 +80,16 @@ pub(super) fn print(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &m
             }
         });
         ui.add_space(24.0);
-        ui.vertical(|ui| preview_pane(app, ui, &pages, &mut bs.preview_page, vec2(440.0, 520.0), lang.tr("Nothing to print.")));
+        ui.vertical(|ui| preview_pane(app, ui, &pages, total, &mut bs.preview_page, vec2(440.0, 520.0), lang.tr("Nothing to print.")));
     });
 }
 
 /// Draws page `*index` of a `file.printPreview` page list in miniature, with its sheet and range
-/// and the previous/next page buttons; the paper is scaled to fit in `max`. `empty`
-/// shows when there is no page. File › Print and File › Export › Create PDF both preview
+/// and the previous/next page buttons; the paper is scaled to fit in `max`. `total` is the whole
+/// job's page count: a page range lists only its pages, shown under their numbers in the job.
+/// `empty` shows when there is no page. File › Print and File › Export › Create PDF both preview
 /// through here, so they show the same page. `*index` is kept inside the list.
-pub(super) fn preview_pane(app: &SheetApp, ui: &mut Ui, pages: &[Json], index: &mut usize, max: egui::Vec2, empty: &str) {
+pub(super) fn preview_pane(app: &SheetApp, ui: &mut Ui, pages: &[Json], total: u64, index: &mut usize, max: egui::Vec2, empty: &str) {
     let t = Tokens::get(ui.ctx());
     let lang = app.ui.language;
     if pages.is_empty() {
@@ -90,7 +110,7 @@ pub(super) fn preview_pane(app: &SheetApp, ui: &mut Ui, pages: &[Json], index: &
     p.rect_stroke(rect, 2.0, Stroke::new(1.0, t.ribbon_border), StrokeKind::Inside);
     if let Some(d) = app.session.active() {
         paint_page(p, rect, w, page, &d.wb, &t);
-        paint_header_footer(p, rect, (w, h), page, pages.len(), d, &t);
+        paint_header_footer(p, rect, (w, h), page, usize::try_from(total).unwrap_or(usize::MAX), d, &t);
     }
     let sheet = page.get("sheet").and_then(Json::as_str).unwrap_or("");
     let range = page.get("range").and_then(Json::as_str).unwrap_or("");
@@ -101,7 +121,9 @@ pub(super) fn preview_pane(app: &SheetApp, ui: &mut Ui, pages: &[Json], index: &
         if ui.add_enabled(*index > 0, egui::Button::new("◀")).on_hover_text(lang.tr("Previous page")).clicked() {
             *index = index.saturating_sub(1);
         }
-        let text = lang.tr("Page {page} of {pages}").replace("{page}", &(*index + 1).to_string()).replace("{pages}", &pages.len().to_string());
+        // The page's own number in the job, as its header and footer print it.
+        let number = page.get("page").and_then(Json::as_u64).unwrap_or(*index as u64 + 1);
+        let text = lang.tr("Page {page} of {pages}").replace("{page}", &number.to_string()).replace("{pages}", &total.to_string());
         ui.label(text);
         if ui.add_enabled(*index < last, egui::Button::new("▶")).on_hover_text(lang.tr("Next page")).clicked() {
             *index = (*index + 1).min(last);
@@ -170,6 +192,28 @@ fn paint_header_footer(p: &egui::Painter, rect: Rect, (paper_w, paper_h): (f32, 
             }
         }
     }
+}
+
+/// Pages [from] to [to]: a page range as two small number fields, in a horizontal layout. Empty
+/// fields mean the first and the last page. `drafts` hold the text as typed (a field that isn't
+/// being edited shows `range`); returns the new range when a field changed it.
+pub(super) fn page_range_fields(ui: &mut Ui, lang: Language, id: &str, drafts: &mut [String; 2], range: PageRange) -> Option<PageRange> {
+    let mut next = range;
+    for (i, (label, bound)) in [("Pages", &mut next.from), ("Print pages|to", &mut next.to)].into_iter().enumerate() {
+        let Some(draft) = drafts.get_mut(i) else { continue };
+        let label = ui.label(lang.tr(label));
+        let field = ui.make_persistent_id((id, i));
+        if !ui.ctx().memory(|m| m.has_focus(field)) {
+            *draft = bound.map(|page| page.to_string()).unwrap_or_default();
+        }
+        let edit = egui::TextEdit::singleline(draft).id(field).desired_width(44.0).char_limit(5);
+        if ui.add(edit).labelled_by(label.id).changed() {
+            draft.retain(|c| c.is_ascii_digit());
+            // 0 is no page: like an empty field, it prints from the first or to the last page.
+            *bound = draft.parse::<u32>().ok().filter(|page| *page >= 1);
+        }
+    }
+    (next != range).then_some(next)
 }
 
 /// Most rows and columns one preview page draws (a page holds far fewer at any readable scale).
