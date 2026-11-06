@@ -43,6 +43,38 @@ pub use gridcraft_math as math;
 pub use gridcraft_model as model;
 pub use gridcraft_numfmt as numfmt;
 pub use selection::Selection;
+
+/// Prints new sheets, and sheets whose file has no page setup, on the system region's paper (A4,
+/// Letter in the US…), as Excel takes the printer's default. Called once at start-up by the apps;
+/// without it (tests, embedders) that paper is Letter (#2469).
+pub fn use_system_paper() {
+    let env = |name: &str| std::env::var(name).ok();
+    if let Some(paper) = system_paper(env, sys_locale::get_locale()) {
+        gridcraft_model::set_default_paper(paper);
+    }
+}
+
+/// The paper of the first locale that names a region: POSIX's for paper (`LC_ALL`, then
+/// `LC_PAPER`), then the system's (`sys_locale`, which reads the message locale on Unix and the
+/// regional format on Windows and macOS).
+fn system_paper(env: impl Fn(&str) -> Option<String>, system: Option<String>) -> Option<&'static str> {
+    ["LC_ALL", "LC_PAPER"].into_iter().filter_map(env).chain(system).find_map(|tag| gridcraft_model::paper_for_locale(&tag))
+}
+
+#[cfg(test)]
+mod system_paper_tests {
+    /// The default paper follows the paper locale where POSIX has one: LC_ALL, then LC_PAPER, then
+    /// the system locale; a locale without a region (`C`) is passed over.
+    #[test]
+    fn the_default_paper_follows_the_paper_locale() {
+        let env = |vars: &'static [(&'static str, &'static str)]| move |name: &str| vars.iter().find(|(k, _)| *k == name).map(|(_, v)| v.to_string());
+        assert_eq!(super::system_paper(env(&[("LC_PAPER", "fr_FR.UTF-8")]), Some("en_US".into())), Some("A4"));
+        assert_eq!(super::system_paper(env(&[("LC_ALL", "en_US.UTF-8"), ("LC_PAPER", "de_DE")]), None), Some("Letter"));
+        assert_eq!(super::system_paper(env(&[("LC_ALL", "C")]), Some("en-GB".into())), Some("A4"));
+        assert_eq!(super::system_paper(env(&[]), Some("en-US".into())), Some("Letter"));
+        assert_eq!(super::system_paper(env(&[]), None), None);
+    }
+}
 pub use windows::{Target, TargetGuard, WindowState, WindowView};
 
 #[derive(Debug, thiserror::Error)]

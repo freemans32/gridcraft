@@ -10,7 +10,10 @@ mod pivot;
 mod print;
 
 pub use pivot::{PivotCalcField, PivotDateGroup, PivotField, PivotFilter, PivotFunc, PivotLayout, PivotShowAs, PivotSort, PivotTable, PivotValue};
-pub use print::{EditRange, HfPage, HfPicture, LineInfo, MAX_HF_PICTURES, Orientation, PageOrder, PrintSettings, SheetProtection, password_hash};
+pub use print::{
+    EditRange, HfPage, HfPicture, LineInfo, MAX_HF_PICTURES, Orientation, PageOrder, PrintSettings, SheetProtection, default_paper, paper_for_locale,
+    password_hash, set_default_paper,
+};
 
 // ---------------------------------------------------------------- tables
 
