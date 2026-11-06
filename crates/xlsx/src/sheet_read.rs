@@ -286,7 +286,15 @@ pub fn read_sheet(cx: &mut Ctx<'_>, part: &str, name: &str) -> Result<(Sheet, cr
                     ("firstFooter", &mut pr.first_footer),
                 ] {
                     // Excel caps each at 255 characters; a hostile file can't make them huge.
-                    *slot = e.child(tag).map(|h| h.text.chars().take(255).collect()).unwrap_or_default();
+                    // Line breaks other than LF come escaped (`_x000D_`, #2468). A character takes at
+                    // most 14 escaped ones (a surrogate pair), so only that much text is decoded.
+                    *slot = e
+                        .child(tag)
+                        .map(|h| {
+                            let raw: String = h.text.chars().take(255 * 14).collect();
+                            crate::xml::decode_xstring(&raw).chars().take(255).collect()
+                        })
+                        .unwrap_or_default();
                 }
                 pr.different_first = e.flag("differentFirst", false);
                 pr.different_odd_even = e.flag("differentOddEven", false);

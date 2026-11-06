@@ -444,7 +444,8 @@ pub struct HfLine {
 pub fn section_lines(sec: &HfSection, with_picture: bool) -> Vec<HfLine> {
     let mut start = 0usize;
     let mut out = vec![];
-    for line in sec.text.split('\n').take(20) {
+    // Excel breaks at a carriage return as at a line feed: CR LF is two breaks (#2468).
+    for line in sec.text.split(['\r', '\n']).take(20) {
         let n = line.chars().count();
         match sec.picture.filter(|p| with_picture && *p >= start && *p <= start + n).map(|p| p - start) {
             Some(k) => {
