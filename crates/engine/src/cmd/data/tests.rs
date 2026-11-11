@@ -373,7 +373,7 @@ fn filter_list_orders_arabic_like_sort() {
     s.execute("range.setValues", json!({"range": "A1", "values": [["H"], ["بج"], ["بُت"], ["\u{200F}بب"]]})).unwrap();
     s.execute("data.filter", json!({"range": "A1:A4"})).unwrap();
     let doc = s.doc().unwrap();
-    let list: Vec<String> = filter_values(&doc.wb, 0, 0).into_iter().map(|(t, _)| t).collect();
+    let list: Vec<String> = filter_list(&doc.wb, 0, 0).values.into_iter().map(|(t, _)| t).collect();
     assert_eq!(list, ["\u{200F}بب", "بُت", "بج"]);
 }
 
