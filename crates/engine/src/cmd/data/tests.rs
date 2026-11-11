@@ -367,6 +367,17 @@ fn subtotal_rows_take_the_formats_above_and_bold_only_the_label() {
 }
 
 #[test]
+fn filter_list_orders_arabic_like_sort() {
+    let mut s = Session::new();
+    s.new_workbook();
+    s.execute("range.setValues", json!({"range": "A1", "values": [["H"], ["بج"], ["بُت"], ["\u{200F}بب"]]})).unwrap();
+    s.execute("data.filter", json!({"range": "A1:A4"})).unwrap();
+    let doc = s.doc().unwrap();
+    let list: Vec<String> = filter_values(&doc.wb, 0, 0).into_iter().map(|(t, _)| t).collect();
+    assert_eq!(list, ["\u{200F}بب", "بُت", "بج"]);
+}
+
+#[test]
 fn filter_by_huge_numeric_column_is_rejected_not_overflowed() {
     let mut s = Session::new();
     s.new_workbook();

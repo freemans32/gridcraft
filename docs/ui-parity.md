@@ -236,6 +236,24 @@ pairs (text 4.5:1, glyphs 3:1) are checked by `theme::contrast_tests`.
 
 ## Feel
 
+Mixed CJK, Latin and digits share a baseline in the grid, editor and window title when CJK
+fallback fonts are used. Baseline alignment can increase line height; manual row heights
+continue to clip oversized text.
+
+Wrapped and unwrapped cells use the same vertical margins. With the same font and top
+alignment, a number aligns with the first line of neighbouring wrapped text; fallback font
+height does not shift the primary font's baseline between cells. Leading and trailing blank
+lines retain their space when positioning wrapped text. Emoji and symbol fallbacks keep their
+centering when they start a line or occupy it alone.
+
+Offscreen macOS renders at 80%, 100% and 280% cover mixed text, regular/bold/italic/bold-italic
+roles, automatic wrapping, explicit line breaks and a `yyyy年m月d日` date. The before/after
+comparison uses the same synthetic cells and the default 10 pt cell role: Arial with
+Hiragino Sans GB fallback on the tested Mac.
+Automated regressions check baseline positions, including the actual truncated title layout.
+Glyph scaling is unchanged; the original Calibri 10 visual-size case still needs confirmation
+on a host with that font installed.
+
 Pixel comparison against Excel screenshots hasn't been run since M1; fonts depend on the system
 (no Calibri; Carlito would match metrics, #29, #4, #168 for weights); icons are GridCraft's own
 by rule and will never match Office's, by design.
@@ -254,12 +272,16 @@ File > Print offers Use Page Setup, No Scaling, Fit Sheet, Fit All Columns and F
 |---|---|---|
 | 2026-11-06 | minor | File › Export › Create PDF has Publish What: Active Sheet (one, since sheets can't be grouped), Entire Workbook or Selection (all its areas); the preview follows the choice and the selection (#3491) |
 | 2026-11-06 | minor | File › Export › Create PDF previews, beside it, the pages it writes (the Print page's preview, laid out from the same parameters by `file.printPreview`), with previous/next page; the preview follows the active sheet and every edit (#3488) |
-| 2026-11-03 | minor | Header & Footer tab: Picture opens the picture picker (native, or the browser's) and puts `&[Picture]` at the caret of the section being edited; the picture is saved with the text when the edit is committed, as one undo step (`pageLayout.headerFooterPicture` with `spec`), and Esc or erasing the field drops it; Picture is off on a sheet that keeps its file's header/footer drawing as it was (one that can't be modelled). Format Picture (on when the section has a picture) sets its height and width, in centimetres or inches as the rulers, with Lock Aspect Ratio. Labels in every catalog (#1257) |
 | 2026-11-06 | minor | Ctrl+Shift+= and Ctrl+numpad Plus reuse Insert Cut Cells / Insert Copied Cells when the clipboard holds cells. Whole lines move or copy before the destination, blocks open Insert Paste, and Undo restores the move. Nonadjacent copied selections are refused before insertion. |
 | 2026-11-06 | minor | Copied number formats are mapped before precision-as-displayed can round pasted values, even after Undo recycles style IDs. Empty input keeps explicit default-format overrides. Insertions that skip formatting warn in the existing notice bar while preserving their JSON result |
 | 2026-11-06 | minor | Insertion caches repeated border-style derivations and bounds preparatory style comparisons at 4,000,000 independently of the stored-cell limit; exceeding either limit reports formattingSkipped |
 | 2026-11-06 | minor | Insert Copied Cells carries effective formats between sheets, including blank inherited styles and default overrides. Whole-line styles remain sparse; source dimensions and visibility stay separate. Transfers exceeding 1,000,000 differing cells or 4,000,000 comparisons are refused atomically |
 | 2026-11-06 | minor | Inserted cells and lines retain explicit default-format overrides of inherited row/column styles; empty overrides survive shifts, undo/redo and XLSX/JSON save/open (`insert_format_reset`) |
+| 2026-11-05 | minor | Reconcile upstream form-control coverage with the CJK baseline and cell-alignment updates |
+| 2026-11-04 | minor | Keep centered emoji and symbol fallback placement when a row starts with a fallback or contains only fallbacks; use primary or baseline-aligned glyphs to anchor cell alignment |
+| 2026-11-04 | minor | Preserve leading and trailing blank lines in wrapped cells when calculating vertical alignment; regression covers single, multiple and all-empty lines |
+| 2026-11-04 | minor | Align wrapped and unwrapped cells with the same vertical margins; regressions compare numbers with mixed CJK/Latin text, including explicit line breaks |
+| 2026-11-03 | minor | Header & Footer tab: Picture opens the picture picker (native, or the browser's) and puts `&[Picture]` at the caret of the section being edited; the picture is saved with the text when the edit is committed, as one undo step (`pageLayout.headerFooterPicture` with `spec`), and Esc or erasing the field drops it; Picture is off on a sheet that keeps its file's header/footer drawing as it was (one that can't be modelled). Format Picture (on when the section has a picture) sets its height and width, in centimetres or inches as the rulers, with Lock Aspect Ratio. Labels in every catalog (#1257) |
 | 2026-11-02 | minor | Form controls: buttons, sliders (scroll bars) and spin buttons placed, worked, selected and edited on the sheet (Insert › Controls, Assign Action, Format Control); catalog 281 / 296 |
 | 2026-11-03 | minor | Recover Unsaved Workbooks: while a workbook has unsaved changes the desktop app writes a copy of it every 10 seconds at most (on a worker thread, flushed to disk and renamed over the last copy); saving, Don't Save or undoing to the saved state removes it, and copies a crash or forced restart left are offered in File › Open at the next start (`file.recover`). Workbooks opened from a password-protected file get no copy |
 | 2026-11-04 | minor | While editing a formula (also after F2), a coloured reference outline on the grid can be dragged: from inside the cell or by its border to point the reference at other cells (in point mode a drag inside a cell still points a new range), by a corner to resize it around the opposite corner. The formula text follows, keeping `$` markers and the sheet prefix; the edit stays open. Whole-row and whole-column references aren't draggable yet |
@@ -282,10 +304,12 @@ File > Print offers Use Page Setup, No Scaling, Fit Sheet, Fit All Columns and F
 | 2026-11-02 | minor | Python mode edits a cell's code in the formula bar's code editor (Ctrl+Alt+Shift+P, `=PY` then Tab, editing a Python cell), with the PY badge beside fx; its keys apply in input order, also several in one frame, and Ctrl+Enter commits through `python.set` (empty code clears the cell), keeping the code and showing the command's message when the code is refused |
 | 2026-11-02 | minor | Insert › Symbols: Equation split button (access keys N E), a gallery of examples, and an equation editor with quick-insert buttons, the error underlined at its position and a live preview; double-clicking an equation edits it |
 | 2026-11-02 | minor | Floating objects: one selection for charts, pictures, shapes and slicers, eight resize handles with matching cursors (right-to-left sheets included), Escape drops the selection |
+| 2026-11-02 | minor | Record macOS mixed CJK/Latin rendering validation, the actual fallback fonts and the unverified Calibri 10 case |
 | 2026-11-01 | minor | Chart Design › Add Chart Element offers Data Table with/no legend keys and None; Format Chart Area has a Data Table section with visibility, legend keys, horizontal/vertical borders and outline. Both use engine commands. |
 | 2026-11-01 | minor | Page Setup has a Page order choice (Down, then over, the default, or Over, then down) with a small picture of the order, also when Print Titles opens it on its Sheet tab; OK sets it with the margins in one undo step. Printing, PDF export, the print preview, Page Break Preview's page numbers and Page Layout view's headers and footers follow the order. The dialog is in German now too |
 | 2026-11-01 | minor | Formulas › Error Checking › Trace Error (`formulas.traceError`): red arrows from the cell an error starts in to the selected cell, through the first reference showing the same error at each step, and blue arrows from that cell's own references, as measured in Excel; the command returns the source and the arrows |
 | 2026-11-01 | minor | Trace arrows stay when the sheet is zoomed (View › Zoom, the status bar, Ctrl+wheel), as in Excel; every zoom used to remove them (#3097) |
+| 2026-11-01 | minor | Assert shared baselines in the actual title layout and record manual visual-size validation of a compiled macOS build |
 | 2026-10-31 | minor | File › Print preview draws each page's header and footer: text with its fields (page number, page count, date, sheet, file) and the pictures (`&G`) an XLSX file brought, laid out by `layout_header_footer`, the one layout printing uses, with the geometry `file.printPreview` now gives each page (`hfPage`, header and footer margins, `hfSides`, `hfScale`). It drew only the cells' text (#1257) |
 | 2026-10-31 | minor | Page Layout view draws the header and footer pictures (`&G`) an XLSX file brought, laid out as printing lays them out (same line split, margins and Scale with Document), from the floating-picture texture cache (#1257). Sections without a picture are drawn as before |
 | 2026-10-31 | minor | Printing and PDF export draw the header and footer pictures (`&G`) an XLSX file brought, in their section and line (#1257) |
@@ -293,6 +317,7 @@ File > Print offers Use Page Setup, No Scaling, Fit Sheet, Fit All Columns and F
 | 2026-10-31 | minor | Esc in a File-page text field leaves the field and cancels editing; the next Esc returns to the sheet (#3035) |
 | 2026-10-31 | minor | Recently Used lists the functions most recently entered in a formula from any source, kept with the preferences; the Insert Function dialog is titled as in Excel, its category list (Most Recently Used, All, each category) works, and its category column follows the widest name shown |
 | 2026-10-31 | minor | Formulas › Function Library: Insert Function, the AutoSum split button and three columns of labelled small buttons with category colours; category menus end with Insert Function…; More Functions cascades; Home › Editing shares the AutoSum menu; MR key tip for Recently Used |
+| 2026-10-31 | minor | CJK fallback text shares the Latin baseline in cells, editors and window titles; fixed row heights and clipping remain workbook-controlled |
 | 2026-10-30 | minor | Checkbox cells print and export to PDF as boxes, as on screen: unchecked white with a grey outline, checked green with a white tick (#2972). They printed their value as TRUE or FALSE; other values in a checkbox cell still print as text |
 | 2026-10-29 | minor | Formula pointing from the keyboard: Ctrl+arrow (⌘arrow) moves the pointed cell to the edge of its data and Ctrl+Shift+arrow (⌘⇧arrow) extends the pointed range there, as the same keys move and extend the selection, so typing `=COUNTIF(`, clicking the top of a column and pressing ⌘⇧↓ points at the whole column of data; the keys used to move or extend by one cell. A range reaching the sheet edge is written as whole columns or rows (`A:B`). The editor reads the modifiers of the arrow's own key event, so a keystroke pressed and released within one frame (a control client's `ui.key`, an automation tool) keeps its Shift and Ctrl |
 | 2026-10-29 | minor | Insert Hyperlink opens with an existing link's address, display text and ScreenTip (#2876). An address-only edit preserves the cell's content and formula; Cancel leaves the link unchanged, and Undo restores the edit |
