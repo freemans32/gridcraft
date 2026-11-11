@@ -523,7 +523,7 @@ mod tests {
         fn reset(s: &mut CellStore, moved: Vec<(CellRef, Cell)>, to: impl Fn(CellRef) -> Option<CellRef>) {
             for (at, cell) in moved {
                 if let Some(at) = to(at) {
-                    s.set(at, cell);
+                    s.set_explicit(at, cell);
                 }
             }
         }
@@ -692,7 +692,9 @@ mod tests {
     }
 
     #[test]
-    fn moved_blank_cell_clears_its_destination() {
+    fn moved_blank_cell_keeps_its_explicit_default_override() {
+        // A stored blank cell is an explicit default-format override of its row or column
+        // style (#1100): a shift moves it like any other cell, replacing what was there.
         let mut s = CellStore::new();
         s.set(c(3, 0), Cell::value(1.0.into()));
         s.set(c(5, 0), Cell::value(2.0.into()));
@@ -701,9 +703,9 @@ mod tests {
             *cell = Cell::default();
         }
         s.shift_rows(5, -2);
-        assert!(s.get(c(3, 0)).is_none());
+        assert!(s.get(c(3, 0)).is_some_and(Cell::is_blank));
         assert_eq!(s.get(c(3, 1)).map(|x| x.value.clone()), Some(Value::Number(3.0)));
-        assert_eq!(s.len(), 1);
+        assert_eq!(s.len(), 2);
     }
 
     #[test]
