@@ -26,6 +26,7 @@ fn copy_impl(s: &mut Session, p: &Json, cut: bool) -> Result<Json> {
             range
         }
     };
+    let mut filtered = false;
     let (wb, range, areas) = if ranges.len() > 1 {
         let areas: Vec<RangeRef> = ranges.iter().map(|r| trim(*r)).collect();
         let (wb, block) = slide_together(&d.wb, sheet, &areas).ok_or_else(multiple)?;
@@ -43,6 +44,7 @@ fn copy_impl(s: &mut Session, p: &Json, cut: bool) -> Result<Json> {
             [only] => (d.wb.clone(), *only, Vec::new()),
             _ => {
                 let (wb, block) = slide_together(&d.wb, sheet, &visible).ok_or_else(multiple)?;
+                filtered = true;
                 (std::sync::Arc::new(wb), block, visible)
             }
         };
@@ -57,7 +59,7 @@ fn copy_impl(s: &mut Session, p: &Json, cut: bool) -> Result<Json> {
     // The HTML rendering is for the host clipboard (UI); it can reach 4 MB, so agents and
     // scripts get it only when they ask for it.
     let html = if p.get("html").and_then(Json::as_bool) == Some(true) { crate::io::range_html(&wb, sheet, range, &text) } else { None };
-    let clip = Clipboard { wb, sheet, range, cut, doc_uid: d.uid, text: text.clone(), areas, selected, trust: d.trust };
+    let clip = Clipboard { wb, sheet, range, cut, doc_uid: d.uid, text: text.clone(), areas, filtered, selected, trust: d.trust };
     s.clipboard = Some(clip);
     let mut result = json!({"range": range.a1(), "text": text});
     if let Some(html) = html {

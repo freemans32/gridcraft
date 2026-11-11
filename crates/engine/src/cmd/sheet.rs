@@ -794,7 +794,7 @@ fn delete_cells(s: &mut Session, p: &Json) -> Result<Json> {
 /// cut, moves) the clipboard there, as one undo step.
 fn insert_copied_cells(s: &mut Session, p: &Json) -> Result<Json> {
     let Some(clip) = s.clipboard.clone() else { return Err(EngineError::Other("Nothing to paste.".into())) };
-    if clip.areas.len() > 1 {
+    if clip.areas.len() > 1 && !clip.filtered {
         return Err(EngineError::Other("This action won't work on multiple selections.".into()));
     }
     let sheet = target_sheet(s, p)?;
