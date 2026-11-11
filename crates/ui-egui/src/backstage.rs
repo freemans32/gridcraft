@@ -605,11 +605,13 @@ fn action_row(ui: &mut Ui, icon: Icon, title: &str, detail: &str) -> egui::Respo
     let (rect, resp) = ui.allocate_exact_size(vec2(width, 56.0), Sense::click());
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, title));
     let p = ui.painter();
-    if resp.hovered() {
+    // A disabled row (Create PDF with nothing to export) is drawn dimmed and doesn't highlight.
+    let ink = if ui.is_enabled() { t.text } else { t.text_dim };
+    if ui.is_enabled() && resp.hovered() {
         p.rect_filled(rect, 4.0, t.hover);
     }
-    icons::paint(p, Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(24.0, 24.0)), icon, t.text);
-    p.text(pos2(rect.left() + 52.0, rect.center().y - 9.0), Align2::LEFT_CENTER, title, theme::ui_bold(13.5), t.text);
+    icons::paint(p, Rect::from_center_size(pos2(rect.left() + 24.0, rect.center().y), vec2(24.0, 24.0)), icon, ink);
+    p.text(pos2(rect.left() + 52.0, rect.center().y - 9.0), Align2::LEFT_CENTER, title, theme::ui_bold(13.5), ink);
     p.text(pos2(rect.left() + 52.0, rect.center().y + 10.0), Align2::LEFT_CENTER, detail, theme::ui_font(12.0), t.text_dim);
     resp
 }
@@ -859,9 +861,15 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
         params["fitToPage"] = json!(true);
     }
     bs.pdf_pages.apply(&mut params);
-    if action_row(ui, Icon::Paper, lang.tr("Create PDF"), lang.tr("Save the sheet as a PDF document that keeps its page layout.")).clicked()
-        && export_pdf(app, params.clone())
-    {
+    refresh_export_preview(app, bs, params.clone());
+    // Create PDF is offered only when the preview has pages: with nothing to export, a layout
+    // error or no workbook open it would write nothing.
+    let can_export = matches!(bs.export_preview.as_ref(),
+        Some((_, Ok(preview))) if preview.get("pageList").and_then(Json::as_array).is_some_and(|p| !p.is_empty()));
+    let row = ui.add_enabled_ui(can_export, |ui| {
+        action_row(ui, Icon::Paper, lang.tr("Create PDF"), lang.tr("Save the sheet as a PDF document that keeps its page layout."))
+    });
+    if row.inner.clicked() && export_pdf(app, params) {
         out.close = true;
     }
     ui.horizontal_top(|ui| {
@@ -892,7 +900,6 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
         });
         ui.add_space(16.0);
         ui.vertical(|ui| {
-            refresh_export_preview(app, bs, params);
             match bs.export_preview.as_ref().map(|(_, preview)| preview) {
                 Some(Ok(preview)) => {
                     let pages = preview.get("pageList").and_then(Json::as_array).map_or(&[][..], Vec::as_slice);
@@ -900,7 +907,10 @@ fn export(app: &mut SheetApp, ui: &mut Ui, bs: &mut Backstage, out: &mut Outcome
                     let total = preview.get("total").and_then(Json::as_u64).unwrap_or(pages.len() as u64);
                     preview_pane(app, ui, pages, total, &mut bs.export_page, vec2(300.0, 380.0), lang.tr("Nothing to export."));
                 }
-                Some(Err(e)) => dim(ui, e),
+                // A layout error blocks the export, so it reads as one.
+                Some(Err(e)) => {
+                    ui.label(RichText::new(e.as_str()).font(theme::ui_font(12.5)).color(t.danger));
+                }
                 None => dim(ui, lang.tr("No workbook is open.")),
             }
         });
@@ -935,10 +945,16 @@ fn pdf_params(app: &SheetApp, publish: PublishWhat) -> Json {
 fn refresh_export_preview(app: &mut SheetApp, bs: &mut Backstage, params: Json) {
     let Some(key) = app.session.active().map(|d| (d.uid, d.revision, d.wb.active_sheet(), params)) else {
         bs.export_preview = None;
+        bs.export_page = 0;
         return;
     };
     if bs.export_preview.as_ref().is_some_and(|(k, _)| *k == key) {
         return;
+    }
+    // Another workbook, sheet or parameters start at the first page; an edit (a new revision)
+    // keeps the page being looked at, clamped to the new page count.
+    if !bs.export_preview.as_ref().is_some_and(|(k, _)| k.0 == key.0 && k.2 == key.2 && k.3 == key.3) {
+        bs.export_page = 0;
     }
     let preview = app.session.run("file.printPreview", key.3.clone()).map_err(|e| crate::clean_error(&e));
     bs.export_preview = Some((key, preview));
