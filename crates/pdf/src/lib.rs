@@ -447,14 +447,18 @@ impl ImageData {
             *next += 1;
             id
         });
-        let mut dict = format!("/Type /XObject /Subtype /Image /Width {} /Height {} /BitsPerComponent 8 /ColorSpace /DeviceRGB", self.width, self.height);
+        let mut dict =
+            format!("/Type /XObject /Subtype /Image /Width {} /Height {} /BitsPerComponent 8 /ColorSpace /DeviceRGB", self.width, self.height);
         if let Some(id) = smask_id {
             let _ = write!(dict, " /SMask {id} 0 R");
         }
         dict.push_str(" /Filter /RunLengthDecode");
         stream_obj(out, offsets, img_id, &dict, &run_length(&self.rgb));
         if let (Some(id), Some(a)) = (smask_id, &self.alpha) {
-            let dict = format!("/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode", self.width, self.height);
+            let dict = format!(
+                "/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode",
+                self.width, self.height
+            );
             stream_obj(out, offsets, id, &dict, &run_length(a));
         }
         img_id

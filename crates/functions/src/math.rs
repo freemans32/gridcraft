@@ -112,8 +112,8 @@ fn sum(a: &[Arg], _c: &mut dyn Ctx) -> R<Value> {
 /// cancels shows 0, not -2.2737E-13 (#3141). A real difference (1E-7 between numbers in the
 /// ten thousands) is orders above the bound and survives unchanged.
 fn sum_dropping_noise(v: &[f64]) -> f64 {
-    let m = v.iter().fold(0.0, |m, x| m.max(x.abs()));
-    let r = v.iter().sum();
+    let m = v.iter().fold(0.0_f64, |m, x| m.max(x.abs()));
+    let r: f64 = v.iter().sum();
     if r != 0.0 && m.is_finite() && r.abs() < v.len() as f64 * f64::EPSILON * m { 0.0 } else { r }
 }
 
