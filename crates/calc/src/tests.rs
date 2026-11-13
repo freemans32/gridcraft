@@ -2912,3 +2912,19 @@ fn text_keeps_reading_with_a_decimal_point_by_default() {
     t.set("C2", "=\"1.5\"*2");
     assert_eq!(t.num("C2"), 3.0);
 }
+
+/// A computed criterion whose formula runs a database function over the same criteria counts as
+/// not met inside itself: before, each record's check ran the function again for every record, at
+/// every level, so the work grew exponentially with the nesting allowed.
+#[test]
+fn computed_criterion_that_reenters_itself_is_not_met() {
+    let mut t = T::new();
+    for (r, (name, age)) in [("name", "age"), ("a", "1"), ("b", "2"), ("c", "3"), ("d", "4"), ("e", "5")].iter().enumerate() {
+        t.set(&format!("F{}", r + 2), name);
+        t.set(&format!("G{}", r + 2), age);
+    }
+    t.set("N46", "Formula");
+    t.set("N47", "=DCOUNT($F$2:$G$7,\"age\",$N$46:$N$47)>0");
+    t.set("B60", "=DCOUNT($F$2:$G$7,\"age\",N46:N47)");
+    assert_eq!(t.num("B60"), 0.0);
+}
