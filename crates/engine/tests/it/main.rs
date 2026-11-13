@@ -31,6 +31,7 @@ mod row_autofit;
 mod self_reading_spill;
 mod sheet_copy_spill;
 mod sheet_name_quoting;
+mod sort_cross_sheet_references;
 mod sparse_clear_invalidation;
 mod stored_list_shape;
 mod structural_edit_rewrite;
